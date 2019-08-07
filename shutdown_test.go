@@ -60,4 +60,15 @@ func TestShutdown(t *testing.T) {
 			"unexpected error returned when shutdown is called with a blocked channel")
 		assert.Equal(t, syscall.SIGTERM, <-done, "done channel did not receive signal")
 	})
+
+	t.Run("ErrorOnNoDoneChannels", func(t *testing.T) {
+		var s fx.Shutdowner
+		app := fxtest.New(
+			t,
+			fx.Populate(&s),
+		)
+		defer app.RequireStart().RequireStop()
+		
+		assert.EqualError(t, s.Shutdown(), "attempted to shutdown without any Done channels")
+	})
 }

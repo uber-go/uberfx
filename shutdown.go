@@ -21,13 +21,15 @@
 package fx
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
 )
 
 // Shutdowner provides a method that can manually trigger the shutdown of the
-// application by sending a signal to all open Done channels. Shutdowner works
+// application by sending a signal to all open Done channels. If no Done channels
+// have been opened, calling Shutdown will return an error. The Shutdowner works
 // on applications using Run as well as Start, Done, and Stop. The Shutdowner is
 // provided to all Fx applications.
 type Shutdowner interface {
@@ -55,6 +57,10 @@ func (app *App) shutdowner() Shutdowner {
 }
 
 func (app *App) broadcastSignal(signal os.Signal) error {
+	if len(app.dones) < 1 {
+		return errors.New("attempted to shutdown without any Done channels")
+	}
+
 	app.donesMu.RLock()
 	defer app.donesMu.RUnlock()
 
