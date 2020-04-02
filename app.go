@@ -334,6 +334,7 @@ type App struct {
 	container    *dig.Container
 	lifecycle    *lifecycleWrapper
 	provides     []provide
+	lateProvides []provide
 	invokes      []invoke
 	logger       *fxlog.Logger
 	startTimeout time.Duration
@@ -426,6 +427,20 @@ func New(opts ...Option) *App {
 	})
 	app.provide(provide{Target: app.shutdowner, Stack: frames})
 	app.provide(provide{Target: app.dotGraph, Stack: frames})
+
+	if err := app.executeLateProvide(); err != nil {
+		app.err = err
+
+		if dig.CanVisualizeError(err) {
+			var b bytes.Buffer
+			dig.Visualize(app.container, &b, dig.VisualizeError(err))
+			err = errorWithGraph{
+				graph: b.String(),
+				err:   err,
+			}
+		}
+		errorHandlerList(app.errorHooks).HandleError(err)
+	}
 
 	if app.err != nil {
 		app.logger.Printf("Error after options were applied: %v", app.err)
@@ -578,6 +593,19 @@ func (app *App) provide(p provide) {
 	if app.err != nil {
 		return
 	}
+
+	if reflect.TypeOf(constructor).Kind() == reflect.Func {
+		ft := reflect.ValueOf(constructor).Type()
+
+		for i := 0; i < ft.NumOut(); i++ {
+			t := ft.Out(i)
+			if t == reflect.TypeOf((*Option)(nil)).Elem() {
+				app.lateProvides = append(app.lateProvides, p)
+				return
+			}
+		}
+	}
+
 	app.logger.PrintProvide(constructor)
 
 	if _, ok := constructor.(Option); ok {
@@ -652,6 +680,62 @@ func (app *App) executeInvokes() error {
 		if err != nil {
 			app.logger.Printf("fx.Invoke(%v) called from:\n%+vFailed: %v", fname, i.Stack, err)
 			return err
+		}
+	}
+
+	return nil
+}
+
+// Execute lateProvides, returning the first error
+// encountered.
+func (app *App) executeLateProvide() error {
+	// TODO: consider taking a context to limit the time spent running invocations.
+
+	for i := 0; i < len(app.lateProvides); i++ {
+		p := app.lateProvides[i]
+
+		fn := p.Target
+		fname := fxreflect.FuncName(fn)
+		app.logger.Printf("LATE PROVIDE\t\t%s", fname)
+
+		if _, ok := fn.(Option); ok {
+			return fmt.Errorf("fx.Option should be passed to fx.New directly, "+
+				"not to fx.LateProvide: fx.LateProvide received %v from:\n%+v",
+				fn, p.Stack)
+		}
+
+		invokeReturn, err := app.container.InvokeReturn(fn)
+		if err != nil {
+			app.logger.Printf("fx.LateProvide(%v) called from:\n%+vFailed: %v", fname, p.Stack, err)
+			return err
+		}
+
+		for _, value := range invokeReturn {
+			// The function returned another function
+			if reflect.TypeOf(value).Kind() == reflect.Func {
+				ft := reflect.ValueOf(value).Type()
+
+				for a := 0; a < ft.NumOut(); a++ {
+					t := ft.Out(a)
+					if t == reflect.TypeOf((*Option)(nil)).Elem() {
+						app.lateProvides = append(app.lateProvides, provide{
+							Target: value,
+							Stack:  fxreflect.CallerStack(0, 1),
+						})
+					}
+				}
+			} else if option, ok := value.(Option); ok {
+				if p, ok := option.(provideOption); ok {
+					for _, target := range p.Targets {
+						app.lateProvides = append(app.lateProvides, provide{
+							Target: target,
+							Stack:  p.Stack,
+						})
+					}
+				} else {
+					option.apply(app)
+				}
+			}
 		}
 	}
 
