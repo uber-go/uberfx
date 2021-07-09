@@ -46,7 +46,7 @@ func TestZapLogger(t *testing.T) {
 		{
 			name:        "LifecycleHookStart",
 			give:        &LifecycleHookStart{CallerName: "bytes.NewBuffer"},
-			wantMessage: "starting",
+			wantMessage: "started",
 			wantFields: map[string]interface{}{
 				"caller": "bytes.NewBuffer",
 			},
@@ -54,48 +54,48 @@ func TestZapLogger(t *testing.T) {
 		{
 			name:        "LifecycleHookStop",
 			give:        &LifecycleHookStop{CallerName: "bytes.NewBuffer"},
-			wantMessage: "stopping",
+			wantMessage: "stopped",
 			wantFields: map[string]interface{}{
 				"caller": "bytes.NewBuffer",
 			},
 		},
 		{
-			name:        "ProvideError",
-			give:        &ProvideError{Err: someError},
-			wantMessage: "error encountered while applying options",
-			wantFields: map[string]interface{}{
-				"error": "some error",
-			},
-		},
-		{
-			name:        "Supply",
-			give:        &Supply{TypeName: "*bytes.Buffer"},
-			wantMessage: "supplying",
+			name:        "Supplied",
+			give:        &Supplied{TypeName: "*bytes.Buffer"},
+			wantMessage: "supplied",
 			wantFields: map[string]interface{}{
 				"type": "*bytes.Buffer",
 			},
 		},
 		{
 			name:        "Provide",
-			give:        &Provide{bytes.NewBuffer, []string{"*bytes.Buffer"}},
-			wantMessage: "providing",
+			give:        &Provide{bytes.NewBuffer, []string{"*bytes.Buffer"}, nil},
+			wantMessage: "provided",
 			wantFields: map[string]interface{}{
 				"constructor": "bytes.NewBuffer()",
 				"type":        "*bytes.Buffer",
 			},
 		},
 		{
+			name:        "Provide with Error",
+			give:        &Provide{Err: someError},
+			wantMessage: "error encountered while applying options",
+			wantFields: map[string]interface{}{
+				"error": "some error",
+			},
+		},
+		{
 			name:        "Invoke",
-			give:        &Invoke{bytes.NewBuffer},
-			wantMessage: "invoke",
+			give:        &Invoke{Function: bytes.NewBuffer, Err: nil},
+			wantMessage: "invoked",
 			wantFields: map[string]interface{}{
 				"function": "bytes.NewBuffer()",
 			},
 		},
 		{
 			name:        "InvokeError",
-			give:        &InvokeError{Function: bytes.NewBuffer, Err: someError},
-			wantMessage: "fx.Invoke failed",
+			give:        &Invoke{Function: bytes.NewBuffer, Err: someError},
+			wantMessage: "invoke failed",
 			wantFields: map[string]interface{}{
 				"error":    "some error",
 				"stack":    "",
@@ -104,15 +104,15 @@ func TestZapLogger(t *testing.T) {
 		},
 		{
 			name:        "StartError",
-			give:        &StartError{Err: someError},
-			wantMessage: "failed to start",
+			give:        &Started{Err: someError},
+			wantMessage: "start failed",
 			wantFields: map[string]interface{}{
 				"error": "some error",
 			},
 		},
 		{
-			name:        "StopSignal",
-			give:        &StopSignal{Signal: os.Interrupt},
+			name:        "Stop",
+			give:        &Stop{Signal: os.Interrupt},
 			wantMessage: "received signal",
 			wantFields: map[string]interface{}{
 				"signal": "INTERRUPT",
@@ -120,16 +120,16 @@ func TestZapLogger(t *testing.T) {
 		},
 		{
 			name:        "StopError",
-			give:        &StopError{Err: someError},
-			wantMessage: "failed to stop cleanly",
+			give:        &Stop{Err: someError},
+			wantMessage: "stop failed",
 			wantFields: map[string]interface{}{
 				"error": "some error",
 			},
 		},
 		{
 			name:        "RollbackError",
-			give:        &RollbackError{Err: someError},
-			wantMessage: "could not rollback cleanly",
+			give:        &Rollback{Err: someError},
+			wantMessage: "rollback failed",
 			wantFields: map[string]interface{}{
 				"error": "some error",
 			},
@@ -137,29 +137,29 @@ func TestZapLogger(t *testing.T) {
 		{
 			name:        "Rollback",
 			give:        &Rollback{StartErr: someError},
-			wantMessage: "startup failed, rolling back",
+			wantMessage: "start failed, rolling back",
 			wantFields: map[string]interface{}{
 				"error": "some error",
 			},
 		},
 		{
-			name:        "Running",
-			give:        &Running{},
-			wantMessage: "running",
+			name:        "Started",
+			give:        &Started{},
+			wantMessage: "started",
 			wantFields:  map[string]interface{}{},
 		},
 		{
-			name:        "CustomLoggerError",
-			give:        &CustomLoggerError{Err: someError},
-			wantMessage: "error constructing logger",
+			name:        "CustomLogger Error",
+			give:        &CustomLogger{Err: someError},
+			wantMessage: "custom logger installation failed",
 			wantFields: map[string]interface{}{
 				"error": "some error",
 			},
 		},
 		{
 			name:        "CustomLogger",
-			give:        &CustomLogger{bytes.NewBuffer},
-			wantMessage: "installing custom fxevent.Logger",
+			give:        &CustomLogger{Function: bytes.NewBuffer, Err: nil},
+			wantMessage: "installed custom fxevent.Logger",
 			wantFields: map[string]interface{}{
 				"function": "bytes.NewBuffer()",
 			},

@@ -49,34 +49,45 @@ func (l *ConsoleLogger) LogEvent(event Event) {
 		l.logf("START\t\t%s", e.CallerName)
 	case *LifecycleHookStop:
 		l.logf("STOP\t\t%s", e.CallerName)
-	case *ProvideError:
-		l.logf("Error after options were applied: %v", e.Err)
-	case *Supply:
+	case *Supplied:
 		l.logf("SUPPLY\t%v", e.TypeName)
 	case *Provide:
 		for _, rtype := range e.OutputTypeNames {
 			l.logf("PROVIDE\t%v <= %v", rtype, fxreflect.FuncName(e.Constructor))
 		}
+		if e.Err != nil {
+			l.logf("Error after options were applied: %v", e.Err)
+		}
 	case *Invoke:
-		l.logf("INVOKE\t\t%s", fxreflect.FuncName(e.Function))
-	case *InvokeError:
-		l.logf("fx.Invoke(%v) called from:\n%+vFailed: %v",
-			fxreflect.FuncName(e.Function), e.Stacktrace, e.Err)
-	case *StartError:
-		l.logf("ERROR\t\tFailed to start: %v", e.Err)
-	case *StopSignal:
-		l.logf("%v", strings.ToUpper(e.Signal.String()))
-	case *StopError:
-		l.logf("ERROR\t\tFailed to stop cleanly: %v", e.Err)
-	case *RollbackError:
-		l.logf("ERROR\t\tCouldn't roll back cleanly: %v", e.Err)
+		if e.Err != nil {
+			l.logf("fx.Invoke(%v) called from:\n%+vFailed: %v",
+				fxreflect.FuncName(e.Function), e.Stacktrace, e.Err)
+		} else {
+			l.logf("INVOKE\t\t%s", fxreflect.FuncName(e.Function))
+		}
+	case *Stop:
+		if e.Err != nil {
+			l.logf("ERROR\t\tFailed to stop cleanly: %v", e.Err)
+		} else {
+			l.logf("%v", strings.ToUpper(e.Signal.String()))
+		}
 	case *Rollback:
-		l.logf("ERROR\t\tStart failed, rolling back: %v", e.StartErr)
-	case *Running:
-		l.logf("RUNNING")
-	case *CustomLoggerError:
-		l.logf("ERROR\t\tFailed to construct custom logger: %v", e.Err)
+		if e.Err != nil {
+			l.logf("ERROR\t\tCouldn't roll back cleanly: %v", e.Err)
+		} else {
+			l.logf("ERROR\t\tStart failed, rolling back: %v", e.StartErr)
+		}
+	case *Started:
+		if e.Err != nil {
+			l.logf("ERROR\t\tFailed to start: %v", e.Err)
+		} else {
+			l.logf("RUNNING")
+		}
 	case *CustomLogger:
-		l.logf("LOGGER\tSetting up custom logger from %v", fxreflect.FuncName(e.Function))
+		if e.Err != nil {
+			l.logf("ERROR\t\tFailed to construct custom logger: %v", e.Err)
+		} else {
+			l.logf("LOGGER\tSetting up custom logger from %v", fxreflect.FuncName(e.Function))
+		}
 	}
 }

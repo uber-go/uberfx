@@ -42,7 +42,7 @@ func TestAnnotated(t *testing.T) {
 	newA := func() *a {
 		return &a{name: "foo"}
 	}
-	t.Run("Provided", func(t *testing.T) {
+	t.Run("Provide", func(t *testing.T) {
 		var in in
 		app := fxtest.New(t,
 			fx.Provide(

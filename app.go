@@ -562,7 +562,7 @@ func New(opts ...Option) *App {
 	app.provide(provide{Target: app.dotGraph, Stack: frames})
 
 	if app.err != nil {
-		app.log.LogEvent(&fxevent.ProvideError{Err: app.err})
+		app.log.LogEvent(&fxevent.Provide{Err: app.err})
 		// Don't return yet. If a custom logger was being used,
 		// we're still buffering messages. We'll want to flush them to
 		// the logger.
@@ -577,7 +577,7 @@ func New(opts ...Option) *App {
 			app.err = multierr.Append(app.err, err)
 			app.log = fallbackLogger
 			bufferLogger.Connect(fallbackLogger)
-			app.log.LogEvent(&fxevent.CustomLoggerError{Err: err})
+			app.log.LogEvent(&fxevent.CustomLogger{Err: err})
 			return app
 		}
 		app.log.LogEvent(&fxevent.CustomLogger{Function: app.logConstructor})
@@ -770,7 +770,7 @@ func (app *App) provide(p provide) {
 
 		switch {
 		case p.IsSupply:
-			app.log.LogEvent(&fxevent.Supply{TypeName: p.SupplyType.String()})
+			app.log.LogEvent(&fxevent.Supplied{TypeName: p.SupplyType.String()})
 		default:
 			outputNames := make([]string, len(info.Outputs))
 			for i, o := range info.Outputs {
@@ -795,7 +795,6 @@ func (app *App) provide(p provide) {
 			opts = append(opts, dig.Name(ann.Name))
 		case len(ann.Group) > 0:
 			opts = append(opts, dig.Group(ann.Group))
-
 		}
 
 		if err := app.container.Provide(ann.Target, opts...); err != nil {
@@ -845,7 +844,7 @@ func (app *App) executeInvokes() error {
 		}
 
 		if err != nil {
-			app.log.LogEvent(&fxevent.InvokeError{
+			app.log.LogEvent(&fxevent.Invoke{
 				Function:   fn,
 				Err:        err,
 				Stacktrace: fmt.Sprintf("%+v", i.Stack), // format stack trace as multi-line
@@ -863,17 +862,17 @@ func (app *App) run(done <-chan os.Signal) {
 	defer cancel()
 
 	if err := app.Start(startCtx); err != nil {
-		app.log.LogEvent(&fxevent.StartError{Err: err})
+		app.log.LogEvent(&fxevent.Started{Err: err})
 		os.Exit(1)
 	}
 	sig := <-done
-	app.log.LogEvent(&fxevent.StopSignal{Signal: sig})
+	app.log.LogEvent(&fxevent.Stop{Signal: sig})
 
 	stopCtx, cancel := context.WithTimeout(context.Background(), app.StopTimeout())
 	defer cancel()
 
 	if err := app.Stop(stopCtx); err != nil {
-		app.log.LogEvent(&fxevent.StopError{Err: err})
+		app.log.LogEvent(&fxevent.Stop{Err: err})
 		os.Exit(1)
 	}
 }
@@ -889,14 +888,14 @@ func (app *App) start(ctx context.Context) error {
 		// Start failed, rolling back.
 		app.log.LogEvent(&fxevent.Rollback{StartErr: err})
 		if stopErr := app.lifecycle.Stop(ctx); stopErr != nil {
-			app.log.LogEvent(&fxevent.RollbackError{Err: stopErr})
+			app.log.LogEvent(&fxevent.Rollback{Err: stopErr})
 
 			return multierr.Append(err, stopErr)
 		}
 
 		return err
 	}
-	app.log.LogEvent(&fxevent.Running{})
+	app.log.LogEvent(&fxevent.Started{})
 
 	return nil
 }

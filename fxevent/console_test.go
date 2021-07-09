@@ -50,27 +50,27 @@ func TestConsoleLogger(t *testing.T) {
 		},
 		{
 			name: "ProvideError",
-			give: &ProvideError{Err: errors.New("some error")},
+			give: &Provide{Err: errors.New("some error")},
 			want: "[Fx] Error after options were applied: some error\n",
 		},
 		{
-			name: "Supply",
-			give: &Supply{TypeName: "*bytes.Buffer"},
+			name: "Supplied",
+			give: &Supplied{TypeName: "*bytes.Buffer"},
 			want: "[Fx] SUPPLY	*bytes.Buffer\n",
 		},
 		{
 			name: "Provide",
-			give: &Provide{bytes.NewBuffer, []string{"*bytes.Buffer"}},
+			give: &Provide{bytes.NewBuffer, []string{"*bytes.Buffer"}, nil},
 			want: "[Fx] PROVIDE	*bytes.Buffer <= bytes.NewBuffer()\n",
 		},
 		{
 			name: "Invoke",
-			give: &Invoke{bytes.NewBuffer},
+			give: &Invoke{Function: bytes.NewBuffer, Err: nil},
 			want: "[Fx] INVOKE		bytes.NewBuffer()\n",
 		},
 		{
 			name: "InvokeError",
-			give: &InvokeError{
+			give: &Invoke{
 				Function:   bytes.NewBuffer,
 				Err:        errors.New("some error"),
 				Stacktrace: "foo()\n\tbar/baz.go:42\n",
@@ -84,22 +84,22 @@ func TestConsoleLogger(t *testing.T) {
 		},
 		{
 			name: "StartError",
-			give: &StartError{Err: errors.New("some error")},
+			give: &Started{Err: errors.New("some error")},
 			want: "[Fx] ERROR		Failed to start: some error\n",
 		},
 		{
-			name: "StopSignal",
-			give: &StopSignal{Signal: os.Interrupt},
+			name: "Stop",
+			give: &Stop{Signal: os.Interrupt},
 			want: "[Fx] INTERRUPT\n",
 		},
 		{
 			name: "StopError",
-			give: &StopError{Err: errors.New("some error")},
+			give: &Stop{Err: errors.New("some error")},
 			want: "[Fx] ERROR		Failed to stop cleanly: some error\n",
 		},
 		{
 			name: "RollbackError",
-			give: &RollbackError{Err: errors.New("some error")},
+			give: &Rollback{Err: errors.New("some error")},
 			want: "[Fx] ERROR		Couldn't roll back cleanly: some error\n",
 		},
 		{
@@ -108,13 +108,13 @@ func TestConsoleLogger(t *testing.T) {
 			want: "[Fx] ERROR		Start failed, rolling back: some error\n",
 		},
 		{
-			name: "Running",
-			give: &Running{},
+			name: "Started",
+			give: &Started{},
 			want: "[Fx] RUNNING\n",
 		},
 		{
 			name: "CustomLoggerError",
-			give: &CustomLoggerError{Err: errors.New("great sadness")},
+			give: &CustomLogger{Err: errors.New("great sadness")},
 			want: "[Fx] ERROR		Failed to construct custom logger: great sadness\n",
 		},
 		{

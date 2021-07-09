@@ -31,7 +31,7 @@ type logBuffer struct {
 	logger fxevent.Logger
 }
 
-// LogEvents buffers or logs an event.
+// LogEvent buffers or logs an event.
 func (l *logBuffer) LogEvent(event fxevent.Event) {
 	if l.logger == nil {
 		l.events = append(l.events, event)
