@@ -72,26 +72,31 @@ func (l *Lifecycle) Append(hook Hook) {
 func (l *Lifecycle) Start(ctx context.Context) error {
 	l.startRecords = make(HookRecords, 0, len(l.hooks))
 	for _, hook := range l.hooks {
-		if hook.OnStart != nil {
-			l.logger.LogEvent(&fxevent.LifecycleHookStart{CallerName: hook.callerFrame.Function})
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			if hook.OnStart != nil {
+				l.logger.LogEvent(&fxevent.LifecycleHookStart{CallerName: hook.callerFrame.Function})
 
-			l.mu.Lock()
-			l.runningHook = hook
-			l.mu.Unlock()
+				l.mu.Lock()
+				l.runningHook = hook
+				l.mu.Unlock()
 
-			begin := time.Now()
-			if err := hook.OnStart(ctx); err != nil {
-				return err
+				begin := time.Now()
+				if err := hook.OnStart(ctx); err != nil {
+					return err
+				}
+				l.mu.Lock()
+				l.startRecords = append(l.startRecords, HookRecord{
+					CallerFrame: hook.callerFrame,
+					Func:        hook.OnStart,
+					Runtime:     time.Since(begin),
+				})
+				l.mu.Unlock()
 			}
-			l.mu.Lock()
-			l.startRecords = append(l.startRecords, HookRecord{
-				CallerFrame: hook.callerFrame,
-				Func:        hook.OnStart,
-				Runtime:     time.Since(begin),
-			})
-			l.mu.Unlock()
+			l.numStarted++
 		}
-		l.numStarted++
 	}
 
 	return nil
@@ -107,29 +112,34 @@ func (l *Lifecycle) Stop(ctx context.Context) error {
 
 	// Run backward from last successful OnStart.
 	for ; l.numStarted > 0; l.numStarted-- {
-		hook := l.hooks[l.numStarted-1]
-		if hook.OnStop == nil {
-			continue
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			hook := l.hooks[l.numStarted-1]
+			if hook.OnStop == nil {
+				continue
+			}
+
+			l.logger.LogEvent(&fxevent.LifecycleHookStop{CallerName: hook.callerFrame.Function})
+
+			l.mu.Lock()
+			l.runningHook = hook
+			l.mu.Unlock()
+
+			begin := time.Now()
+			if err := hook.OnStop(ctx); err != nil {
+				// For best-effort cleanup, keep going after errors.
+				errs = append(errs, err)
+			}
+			l.mu.Lock()
+			l.stopRecords = append(l.stopRecords, HookRecord{
+				CallerFrame: hook.callerFrame,
+				Func:        hook.OnStop,
+				Runtime:     time.Since(begin),
+			})
+			l.mu.Unlock()
 		}
-
-		l.logger.LogEvent(&fxevent.LifecycleHookStop{CallerName: hook.callerFrame.Function})
-
-		l.mu.Lock()
-		l.runningHook = hook
-		l.mu.Unlock()
-
-		begin := time.Now()
-		if err := hook.OnStop(ctx); err != nil {
-			// For best-effort cleanup, keep going after errors.
-			errs = append(errs, err)
-		}
-		l.mu.Lock()
-		l.stopRecords = append(l.stopRecords, HookRecord{
-			CallerFrame: hook.callerFrame,
-			Func:        hook.OnStop,
-			Runtime:     time.Since(begin),
-		})
-		l.mu.Unlock()
 	}
 
 	return multierr.Combine(errs...)
