@@ -176,3 +176,126 @@ func TestAnnotatedString(t *testing.T) {
 		})
 	}
 }
+
+func TestAnnotate(t *testing.T) {
+	type a struct{}
+	type b struct{ a *a }
+	type c struct{ b *b }
+	newA := func() *a { return &a{} }
+	newB := func(a *a) *b {
+		return &b{a}
+	}
+	newC := func(b *b) *c {
+		return &c{b}
+	}
+
+	t.Run("Provide with optional", func(t *testing.T) {
+		app := fxtest.New(t,
+			fx.Provide(
+				fx.Annotate(newB, fx.ParamTags(`name:"a" optional:"true"`)),
+			),
+			fx.Invoke(newC),
+		)
+		defer app.RequireStart().RequireStop()
+		require.NoError(t, app.Err())
+	})
+
+	t.Run("Provide with many annotated params", func(t *testing.T) {
+		app := fxtest.New(t,
+			fx.Provide(
+				fx.Annotate(newB, fx.ParamTags(`optional:"true"`)),
+				fx.Annotate(func(a *a, b *b) interface{} { return nil },
+					fx.ParamTags(`name:"a" optional:"true"`, `name:"b"`),
+					fx.ResultTags(`name:"nil"`),
+				),
+			),
+			fx.Invoke(newC),
+		)
+		defer app.RequireStart().RequireStop()
+		require.NoError(t, app.Err())
+	})
+
+	t.Run("Invoke with optional", func(t *testing.T) {
+		app := fx.New(
+			fx.Invoke(
+				fx.Annotate(newB, fx.ParamTags(`optional:"true"`)),
+			),
+		)
+		err := app.Err()
+		require.NoError(t, err)
+	})
+
+	t.Run("Invoke with a missing dependency", func(t *testing.T) {
+		app := fx.New(
+			fx.Invoke(
+				fx.Annotate(newB, fx.ParamTags(`name:"a"`)),
+			),
+		)
+		err := app.Err()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `missing dependencies`)
+		assert.Contains(t, err.Error(), `missing type: *fx_test.a[name="a"]`)
+	})
+
+	t.Run("provide with annotated result", func(t *testing.T) {
+		app := fxtest.New(t,
+			fx.Provide(
+				newA,
+				fx.Annotate(newB, fx.ResultTags(`name:"B"`)),
+			),
+			fx.Invoke(newC),
+		)
+
+		err := app.Err()
+		require.NoError(t, err)
+		defer app.RequireStart().RequireStop()
+	})
+
+	t.Run("specify more ParamTags than Params", func(t *testing.T) {
+		app := fxtest.New(t,
+			fx.Provide(
+				// This should just leave newA as it is.
+				fx.Annotate(newA, fx.ParamTags(`name:"something"`)),
+			),
+			fx.Invoke(newB),
+		)
+
+		err := app.Err()
+		require.NoError(t, err)
+		defer app.RequireStart().RequireStop()
+	})
+	t.Run("specify two ParamTags", func(t *testing.T) {
+		app := fxtest.New(t,
+			fx.Provide(
+				// This should just leave newA as it is.
+				fx.Annotate(
+					newA,
+					fx.ParamTags(`name:"something"`),
+					fx.ParamTags(`name:"anotherThing"`),
+				),
+			),
+			fx.Invoke(newB),
+		)
+
+		err := app.Err()
+		require.NoError(t, err)
+		defer app.RequireStart().RequireStop()
+	})
+	t.Run("specify two ResultTags", func(t *testing.T) {
+		app := fxtest.New(t,
+			fx.Provide(
+				// This should just leave newA as it is.
+				fx.Annotate(
+					newA,
+					fx.ResultTags(`name:"A"`),
+					fx.ResultTags(`name:"AA"`),
+				),
+			),
+			fx.Invoke(newB),
+		)
+
+		err := app.Err()
+		require.NoError(t, err)
+		defer app.RequireStart().RequireStop()
+	})
+}
